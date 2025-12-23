@@ -7,8 +7,6 @@
     "dev": "concurrently \"npm run server\" \"wait-on tcp:3001 && npm run client\"",
     "server": "tsx --watch api/index.ts",
     "server:once": "tsx api/index.ts",
-        "start": "concurrently \"npm run server\" \"wait-on tcp:3001 && npm run client\"",
-
     "client": "vite",
     "client:force": "vite --force",
     "build": "vite build",
