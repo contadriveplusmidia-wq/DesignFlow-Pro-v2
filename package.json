@@ -1,0 +1,48 @@
+{
+  "name": "designflow-pro",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"wait-on tcp:3001 && npm run client\"",
+    "server": "tsx --watch api/index.ts",
+    "server:once": "tsx api/index.ts",
+        "start": "concurrently \"npm run server\" \"wait-on tcp:3001 && npm run client\"",
+
+    "client": "vite",
+    "client:force": "vite --force",
+    "build": "vite build",
+    "preview": "vite preview",
+    "restart:server": "node scripts/restart-server.js",
+    "restart:client": "node scripts/restart-client.js",
+    "check:dev": "node scripts/check-dev.js"
+  },
+  "dependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.5",
+    "@vercel/node": "^5.5.12",
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^12.5.0",
+    "concurrently": "^9.2.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "lucide-react": "^0.554.0",
+    "pg": "^8.16.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.9.6",
+    "recharts": "^3.5.0",
+    "tsx": "^4.20.6",
+    "wait-on": "^9.0.3"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^22.14.0",
+    "@types/pg": "^8.15.6",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}
