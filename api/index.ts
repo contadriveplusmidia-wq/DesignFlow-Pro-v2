@@ -243,8 +243,8 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     // SQLite pode armazenar booleanos como 't'/'f' ou 1/0 ou 1.0, então vamos usar uma query mais flexível
     const users = await query(
       useSQLite
-        ? "SELECT id, name, password, role, avatar_url, avatar_color, active FROM users WHERE name = ? AND (active = 1 OR active = 1.0 OR active = 't' OR active = 'true' OR CAST(active AS REAL) = 1)"
-        : 'SELECT id, name, password, role, avatar_url, avatar_color, active FROM users WHERE name = $1 AND active = true',
+        ? "SELECT id, name, password, role, avatar_url, avatar_color, active, level FROM users WHERE name = ? AND (active = 1 OR active = 1.0 OR active = 't' OR active = 'true' OR CAST(active AS REAL) = 1)"
+        : 'SELECT id, name, password, role, avatar_url, avatar_color, active, level FROM users WHERE name = $1 AND active = true',
       [name]
     );
     
@@ -285,7 +285,8 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
       role: user.role,
       avatarUrl: user.avatar_url,
       avatarColor: user.avatar_color,
-      active: activeValue
+      active: activeValue,
+      level: user.level || null
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -324,14 +325,15 @@ app.put('/api/auth/change-password', async (req: Request, res: Response) => {
 // ============ USERS ============
 app.get('/api/users', async (req: Request, res: Response) => {
   try {
-    const users = await query('SELECT id, name, role, avatar_url, avatar_color, active FROM users ORDER BY name');
+    const users = await query('SELECT id, name, role, avatar_url, avatar_color, active, level FROM users ORDER BY name');
     return res.json(users.map(u => ({
       id: u.id,
       name: u.name,
       role: u.role,
       avatarUrl: u.avatar_url,
       avatarColor: u.avatar_color,
-      active: u.active === 't' || u.active === 'true' || u.active === true || u.active === 1 || u.active === '1'
+      active: u.active === 't' || u.active === 'true' || u.active === true || u.active === 1 || u.active === '1',
+      level: u.level || null
     })));
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao buscar usuários' });
@@ -341,7 +343,7 @@ app.get('/api/users', async (req: Request, res: Response) => {
 app.get('/api/users/designers', async (req: Request, res: Response) => {
   try {
     const users = await query(
-      "SELECT id, name, role, avatar_url, avatar_color, active FROM users WHERE role = 'DESIGNER' AND (active = 't' OR active = 'true' OR active = 1 OR active = '1') ORDER BY name"
+      "SELECT id, name, role, avatar_url, avatar_color, active, level FROM users WHERE role = 'DESIGNER' AND (active = 't' OR active = 'true' OR active = 1 OR active = '1') ORDER BY name"
     );
     return res.json(users.map(u => ({
       id: u.id,
@@ -349,7 +351,8 @@ app.get('/api/users/designers', async (req: Request, res: Response) => {
       role: u.role,
       avatarUrl: u.avatar_url,
       avatarColor: u.avatar_color,
-      active: u.active === 't' || u.active === 'true' || u.active === true || u.active === 1 || u.active === '1'
+      active: u.active === 't' || u.active === 'true' || u.active === true || u.active === 1 || u.active === '1',
+      level: u.level || null
     })));
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao buscar designers' });
@@ -358,14 +361,23 @@ app.get('/api/users/designers', async (req: Request, res: Response) => {
 
 app.post('/api/users', async (req: Request, res: Response) => {
   try {
-    const { name, password, role, avatarColor } = req.body;
+    const { name, password, role, avatarColor, level } = req.body;
     const id = `user-${Date.now()}`;
     const hashedPassword = await hashPassword(password || '123');
+    const validLevel = level && ['junior', 'pleno', 'senior'].includes(level) ? level : null;
     await execute(
-      'INSERT INTO users (id, name, password, role, avatar_color, active) VALUES (?, ?, ?, ?, ?, 1)',
-      [id, name, hashedPassword, role || 'DESIGNER', avatarColor]
+      'INSERT INTO users (id, name, password, role, avatar_color, active, level) VALUES (?, ?, ?, ?, ?, 1, ?)',
+      [id, name, hashedPassword, role || 'DESIGNER', avatarColor, validLevel]
     );
-    return res.json({ id, name, role: role || 'DESIGNER', avatarColor, active: true });
+    return res.json({ 
+      id, 
+      name, 
+      role: role || 'DESIGNER', 
+      avatarColor, 
+      active: true, 
+      level: validLevel,
+      avatarUrl: null
+    });
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao criar usuário' });
   }
@@ -374,7 +386,7 @@ app.post('/api/users', async (req: Request, res: Response) => {
 app.put('/api/users/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, password, active, avatarColor } = req.body;
+    const { name, password, active, avatarColor, level } = req.body;
     
     // Só hashar senha se ela foi fornecida e não está vazia
     const hashedPassword = (password && password.trim().length > 0) ? await hashPassword(password.trim()) : null;
@@ -398,6 +410,13 @@ app.put('/api/users/:id', async (req: Request, res: Response) => {
     if (avatarColor !== undefined) {
       updates.push('avatar_color = ?');
       params.push(avatarColor);
+    }
+    if (level !== undefined) {
+      // Validar level: null, 'junior', 'pleno', ou 'senior'
+      const validLevel = (level === null || level === '') ? null : 
+        (['junior', 'pleno', 'senior'].includes(level) ? level : null);
+      updates.push('level = ?');
+      params.push(validLevel);
     }
     
     if (updates.length > 0) {
@@ -2669,17 +2688,33 @@ if (useSQLite && db) {
         designer_id VARCHAR(50) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         date VARCHAR(10) NOT NULL,
         note TEXT NOT NULL,
-        type VARCHAR(20) CHECK (type IN ('absence', 'event', 'note')) DEFAULT 'note',
+        type VARCHAR(20) CHECK (type IN ('absence', 'event', 'note', 'meeting')) DEFAULT 'note',
         created_at BIGINT NOT NULL,
         updated_at BIGINT NOT NULL,
         UNIQUE(designer_id, date)
       );
       CREATE INDEX IF NOT EXISTS idx_calendar_observations_date ON calendar_observations(date);
+      
+      -- Tabela de tarefas
+      CREATE TABLE IF NOT EXISTS tasks (
+        id VARCHAR(50) PRIMARY KEY,
+        title TEXT NOT NULL,
+        completed INTEGER DEFAULT 0,
+        due_date VARCHAR(10),
+        priority VARCHAR(10) CHECK (priority IN ('low', 'medium', 'high')) DEFAULT 'low',
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        completed_at BIGINT
+      );
+      CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(completed);
+      CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
+      CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority);
+      CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
       CREATE INDEX IF NOT EXISTS idx_calendar_observations_designer ON calendar_observations(designer_id);
     `);
-    console.log('✅ Tabela calendar_observations criada/verificada');
+    console.log('✅ Tabela calendar_observations e tasks criadas/verificadas');
   } catch (error: any) {
-    console.error('⚠️  Erro ao criar tabela calendar_observations:', error.message);
+    console.error('⚠️  Erro ao criar tabelas:', error.message);
   }
 }
 
@@ -2774,8 +2809,8 @@ app.get('/api/calendar-observations/:id', async (req: Request, res: Response) =>
 
 // POST /api/calendar-observations - Criar nova observação
 app.post('/api/calendar-observations', async (req: Request, res: Response) => {
+  const { designerId, date, note, type } = req.body;
   try {
-    const { designerId, date, note, type } = req.body;
     
     if (!designerId || !date || !note) {
       return res.status(400).json({ error: 'designerId, date e note são obrigatórios' });
@@ -2787,7 +2822,17 @@ app.post('/api/calendar-observations', async (req: Request, res: Response) => {
     }
     
     // Validar tipo
-    const validType = type && ['absence', 'event', 'note'].includes(type) ? type : 'note';
+    const validType = type && ['absence', 'event', 'note', 'meeting'].includes(type) ? type : 'note';
+    
+    // Verificar se o designer existe
+    const designerExists = await queryOne(
+      useSQLite ? 'SELECT id FROM users WHERE id = ?' : 'SELECT id FROM users WHERE id = $1',
+      [designerId]
+    );
+    
+    if (!designerExists) {
+      return res.status(400).json({ error: 'Designer não encontrado. Verifique se o designer existe e está ativo.' });
+    }
     
     const id = `obs_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const now = Date.now();
@@ -2829,9 +2874,23 @@ app.post('/api/calendar-observations', async (req: Request, res: Response) => {
     }, ['createdAt', 'updatedAt']));
   } catch (error: any) {
     console.error('Erro ao criar observação:', error);
+    console.error('Detalhes do erro:', {
+      code: error?.code,
+      message: error?.message,
+      stack: error?.stack,
+      body: req.body
+    });
     
     if (error?.code === 'SQLITE_CONSTRAINT_UNIQUE' || error?.code === '23505') {
       return res.status(400).json({ error: 'Já existe uma observação para este designer nesta data' });
+    }
+    
+    if (error?.code === 'SQLITE_CONSTRAINT_CHECK') {
+      return res.status(400).json({ error: `Tipo de observação inválido. Tipos permitidos: absence, event, note, meeting. Tipo recebido: ${req.body?.type || 'não informado'}` });
+    }
+    
+    if (error?.code === 'SQLITE_CONSTRAINT_FOREIGNKEY' || error?.message?.includes('FOREIGN KEY')) {
+      return res.status(400).json({ error: 'Designer não encontrado. Verifique se o designer existe e está ativo.' });
     }
     
     return res.status(500).json({ error: 'Erro ao criar observação', details: error?.message });
@@ -2864,7 +2923,7 @@ app.put('/api/calendar-observations/:id', async (req: Request, res: Response) =>
     }
     
     if (type !== undefined) {
-      const validType = ['absence', 'event', 'note'].includes(type) ? type : 'note';
+      const validType = ['absence', 'event', 'note', 'meeting'].includes(type) ? type : 'note';
       updates.push(useSQLite ? 'type = ?' : `type = $${params.length + 1}`);
       params.push(validType);
     }
@@ -2942,6 +3001,170 @@ app.delete('/api/calendar-observations/:id', async (req: Request, res: Response)
   } catch (error: any) {
     console.error('Erro ao deletar observação:', error);
     return res.status(500).json({ error: 'Erro ao deletar observação', details: error?.message });
+  }
+});
+
+// ============ TASKS ============
+// GET /api/tasks - Listar todas as tarefas
+app.get('/api/tasks', async (req: Request, res: Response) => {
+  try {
+    const tasks = await query(
+      'SELECT id, title, completed, due_date, priority, created_at, updated_at, completed_at FROM tasks ORDER BY created_at DESC'
+    );
+    
+    return res.json(tasks.map(t => convertNumericFields({
+      id: t.id,
+      title: t.title,
+      completed: t.completed === 1 || t.completed === 't' || t.completed === 'true' || t.completed === true,
+      dueDate: t.due_date || undefined,
+      priority: t.priority || 'low',
+      createdAt: t.created_at,
+      updatedAt: t.updated_at,
+      completedAt: t.completed_at || undefined
+    }, ['createdAt', 'updatedAt', 'completedAt'])));
+  } catch (error: any) {
+    console.error('Erro ao listar tarefas:', error);
+    return res.status(500).json({ error: 'Erro ao listar tarefas', details: error?.message });
+  }
+});
+
+// POST /api/tasks - Criar nova tarefa
+app.post('/api/tasks', async (req: Request, res: Response) => {
+  try {
+    const { title, completed, dueDate, priority } = req.body;
+    
+    if (!title || typeof title !== 'string' || !title.trim()) {
+      return res.status(400).json({ error: 'Título é obrigatório' });
+    }
+    
+    const id = `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const now = Date.now();
+    const validPriority = ['low', 'medium', 'high'].includes(priority) ? priority : 'low';
+    const isCompleted = completed === true || completed === 'true' || completed === 1;
+    
+    await execute(
+      'INSERT INTO tasks (id, title, completed, due_date, priority, created_at, updated_at, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, title.trim(), isCompleted ? 1 : 0, dueDate || null, validPriority, now, now, isCompleted ? now : null]
+    );
+    
+    return res.json(convertNumericFields({
+      id,
+      title: title.trim(),
+      completed: isCompleted,
+      dueDate: dueDate || undefined,
+      priority: validPriority,
+      createdAt: now,
+      updatedAt: now,
+      completedAt: isCompleted ? now : undefined
+    }, ['createdAt', 'updatedAt', 'completedAt']));
+  } catch (error: any) {
+    console.error('Erro ao criar tarefa:', error);
+    return res.status(500).json({ error: 'Erro ao criar tarefa', details: error?.message });
+  }
+});
+
+// PUT /api/tasks/:id - Atualizar tarefa
+app.put('/api/tasks/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { title, completed, dueDate, priority } = req.body;
+    
+    const existing = await queryOne('SELECT * FROM tasks WHERE id = ?', [id]);
+    if (!existing) {
+      return res.status(404).json({ error: 'Tarefa não encontrada' });
+    }
+    
+    const updates: string[] = [];
+    const params: any[] = [];
+    
+    if (title !== undefined) {
+      if (typeof title !== 'string' || !title.trim()) {
+        return res.status(400).json({ error: 'Título inválido' });
+      }
+      updates.push('title = ?');
+      params.push(title.trim());
+    }
+    
+    if (completed !== undefined) {
+      const isCompleted = completed === true || completed === 'true' || completed === 1;
+      updates.push('completed = ?');
+      params.push(isCompleted ? 1 : 0);
+      if (isCompleted && !existing.completed_at) {
+        updates.push('completed_at = ?');
+        params.push(Date.now());
+      } else if (!isCompleted) {
+        updates.push('completed_at = ?');
+        params.push(null);
+      }
+    }
+    
+    if (dueDate !== undefined) {
+      updates.push('due_date = ?');
+      params.push(dueDate || null);
+    }
+    
+    if (priority !== undefined) {
+      const validPriority = ['low', 'medium', 'high'].includes(priority) ? priority : 'low';
+      updates.push('priority = ?');
+      params.push(validPriority);
+    }
+    
+    if (updates.length === 0) {
+      return res.json(convertNumericFields({
+        id: existing.id,
+        title: existing.title,
+        completed: existing.completed === 1 || existing.completed === 't' || existing.completed === 'true' || existing.completed === true,
+        dueDate: existing.due_date || undefined,
+        priority: existing.priority || 'low',
+        createdAt: existing.created_at,
+        updatedAt: existing.updated_at,
+        completedAt: existing.completed_at || undefined
+      }, ['createdAt', 'updatedAt', 'completedAt']));
+    }
+    
+    updates.push('updated_at = ?');
+    params.push(Date.now());
+    params.push(id);
+    
+    await execute(
+      `UPDATE tasks SET ${updates.join(', ')} WHERE id = ?`,
+      params
+    );
+    
+    const updated = await queryOne('SELECT * FROM tasks WHERE id = ?', [id]);
+    
+    return res.json(convertNumericFields({
+      id: updated.id,
+      title: updated.title,
+      completed: updated.completed === 1 || updated.completed === 't' || updated.completed === 'true' || updated.completed === true,
+      dueDate: updated.due_date || undefined,
+      priority: updated.priority || 'low',
+      createdAt: updated.created_at,
+      updatedAt: updated.updated_at,
+      completedAt: updated.completed_at || undefined
+    }, ['createdAt', 'updatedAt', 'completedAt']));
+  } catch (error: any) {
+    console.error('Erro ao atualizar tarefa:', error);
+    return res.status(500).json({ error: 'Erro ao atualizar tarefa', details: error?.message });
+  }
+});
+
+// DELETE /api/tasks/:id - Deletar tarefa
+app.delete('/api/tasks/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    const existing = await queryOne('SELECT * FROM tasks WHERE id = ?', [id]);
+    if (!existing) {
+      return res.status(404).json({ error: 'Tarefa não encontrada' });
+    }
+    
+    await execute('DELETE FROM tasks WHERE id = ?', [id]);
+    
+    return res.json({ success: true });
+  } catch (error: any) {
+    console.error('Erro ao deletar tarefa:', error);
+    return res.status(500).json({ error: 'Erro ao deletar tarefa', details: error?.message });
   }
 });
 

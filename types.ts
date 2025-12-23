@@ -1,6 +1,8 @@
 
 export type Role = 'ADM' | 'DESIGNER';
 
+export type DesignerLevel = 'junior' | 'pleno' | 'senior' | null;
+
 export interface User {
   id: string;
   name: string;
@@ -9,6 +11,7 @@ export interface User {
   avatarUrl?: string;
   avatarColor?: string; // Hex color for background
   active: boolean;
+  level?: DesignerLevel; // Nível do designer (apenas para DESIGNER)
 }
 
 export interface ArtType {
@@ -184,7 +187,18 @@ export interface CalendarObservation {
   designerName?: string;
   date: string; // YYYY-MM-DD format
   note: string;
-  type?: 'absence' | 'event' | 'note'; // Tipo de observação
+  type?: 'absence' | 'event' | 'note' | 'meeting'; // Tipo de observação
   createdAt: number;
   updatedAt: number;
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  completed: boolean;
+  dueDate?: string; // YYYY-MM-DD format (opcional)
+  priority?: 'low' | 'medium' | 'high'; // Urgência
+  createdAt: number;
+  updatedAt: number;
+  completedAt?: number;
 }

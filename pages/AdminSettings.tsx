@@ -14,7 +14,7 @@ export const AdminSettings: React.FC = () => {
     settings, updateSettings, 
     users, addUser, updateUser, deleteUser,
     artTypes, addArtType, updateArtType, deleteArtType, reorderArtTypes,
-    currentUser
+    currentUser, refreshData
   } = useApp();
   
   const [activeTab, setActiveTab] = useState<'brand' | 'team' | 'artTypes' | 'security' | 'notifications'>('brand');
@@ -53,6 +53,7 @@ export const AdminSettings: React.FC = () => {
   const [userName, setUserName] = useState('');
   const [userPassword, setUserPassword] = useState('');
   const [userColor, setUserColor] = useState(PRESET_COLORS[0]);
+  const [userLevel, setUserLevel] = useState<'junior' | 'pleno' | 'senior' | null>(null);
 
   const [showArtModal, setShowArtModal] = useState(false);
   const [editingArt, setEditingArt] = useState<any>(null);
@@ -124,7 +125,8 @@ export const AdminSettings: React.FC = () => {
       // Se está editando, só enviar senha se ela foi preenchida (não vazia)
       const updateData: any = { 
         name: userName, 
-        avatarColor: userColor 
+        avatarColor: userColor,
+        level: userLevel
       };
       // Só adicionar password se foi preenchida (não vazia e não apenas espaços)
       if (userPassword && userPassword.trim().length > 0) {
@@ -137,7 +139,8 @@ export const AdminSettings: React.FC = () => {
         password: userPassword && userPassword.trim().length > 0 ? userPassword.trim() : '123',
         role: 'DESIGNER',
         avatarColor: userColor,
-        active: true
+        active: true,
+        level: userLevel
       });
     }
 
@@ -150,6 +153,7 @@ export const AdminSettings: React.FC = () => {
     setUserName(user.name);
     setUserPassword('');
     setUserColor(user.avatarColor || PRESET_COLORS[0]);
+    setUserLevel(user.level || null);
     setShowUserModal(true);
   };
 
@@ -193,6 +197,7 @@ export const AdminSettings: React.FC = () => {
     setUserName('');
     setUserPassword('');
     setUserColor(PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)]);
+    setUserLevel(null);
   };
 
   const handleSaveArt = async () => {
@@ -494,6 +499,30 @@ export const AdminSettings: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
+                  {/* Seletor de Nível */}
+                  {user.active && (
+                    <select
+                      value={user.level || ''}
+                      onChange={async (e) => {
+                        const newLevel = e.target.value === '' ? null : e.target.value as 'junior' | 'pleno' | 'senior';
+                        try {
+                          await updateUser(user.id, { level: newLevel });
+                          // Recarregar dados para atualizar a UI
+                          await refreshData();
+                        } catch (error) {
+                          alert('Erro ao atualizar nível do designer');
+                        }
+                      }}
+                      className="px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-transparent"
+                      title="Nível do designer"
+                    >
+                      <option value="">Oculto</option>
+                      <option value="junior">Junior</option>
+                      <option value="pleno">Pleno</option>
+                      <option value="senior">Senior</option>
+                    </select>
+                  )}
+                  
                   {/* Toggle Ativo/Inativo */}
                   <button
                     onClick={() => handleToggleActive(user.id)}
@@ -767,6 +796,20 @@ export const AdminSettings: React.FC = () => {
                     />
                   ))}
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Nível</label>
+                <select
+                  value={userLevel || ''}
+                  onChange={(e) => setUserLevel(e.target.value === '' ? null : e.target.value as 'junior' | 'pleno' | 'senior')}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-transparent"
+                >
+                  <option value="">Oculto</option>
+                  <option value="junior">Junior</option>
+                  <option value="pleno">Pleno</option>
+                  <option value="senior">Senior</option>
+                </select>
               </div>
             </div>
 

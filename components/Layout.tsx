@@ -17,7 +17,8 @@ import {
   Calendar,
   Funnel,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  CheckSquare
 } from 'lucide-react';
 import { NotificationBadge } from './notifications/NotificationBadge';
 import { useNotification } from '../hooks/useNotification';
@@ -101,6 +102,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', badge: 0, hasUpdate: false },
     { to: '/admin/history', icon: History, label: 'Histórico', badge: 0, hasUpdate: false },
     { to: '/admin/controle', icon: Calendar, label: 'Controle', badge: 0, hasUpdate: false },
+    { to: '/admin/tasks', icon: CheckSquare, label: 'Tarefas', badge: 0, hasUpdate: false },
     { to: '/admin/feedbacks', icon: MessageSquare, label: 'Feedbacks', badge: 0, hasUpdate: false },
     { to: '/admin/lessons', icon: GraduationCap, label: 'Aulas', badge: 0, hasUpdate: false },
     { to: '/admin/premiacoes', icon: Trophy, label: 'Premiações', badge: 0, hasUpdate: awardsHasUpdates },

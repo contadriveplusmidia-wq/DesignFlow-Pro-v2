@@ -12,7 +12,7 @@ export const AdminControle: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [selectedDesigner, setSelectedDesigner] = useState<string>('');
   const [note, setNote] = useState('');
-  const [type, setType] = useState<'absence' | 'event' | 'note'>('note');
+  const [type, setType] = useState<'absence' | 'event' | 'note' | 'meeting'>('note');
 
   const designers = users.filter(u => u.role === 'DESIGNER' && u.active);
 
@@ -127,22 +127,19 @@ export const AdminControle: React.FC = () => {
     }
 
     try {
+      const observationData = {
+        designerId: selectedDesigner,
+        date: selectedDate,
+        note: note.trim(),
+        type: type || 'note' // Garantir que o tipo seja sempre enviado
+      };
+
       if (selectedObservation) {
         // Editar
-        await updateCalendarObservation(selectedObservation.id, {
-          designerId: selectedDesigner,
-          date: selectedDate,
-          note: note.trim(),
-          type
-        });
+        await updateCalendarObservation(selectedObservation.id, observationData);
       } else {
         // Criar
-        await addCalendarObservation({
-          designerId: selectedDesigner,
-          date: selectedDate,
-          note: note.trim(),
-          type
-        });
+        await addCalendarObservation(observationData);
       }
       handleCloseModal();
     } catch (error: any) {
@@ -170,6 +167,8 @@ export const AdminControle: React.FC = () => {
         return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-300 dark:border-red-700';
       case 'event':
         return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700';
+      case 'meeting':
+        return 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700';
       default:
         return 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600';
     }
@@ -182,6 +181,8 @@ export const AdminControle: React.FC = () => {
         return 'Falta';
       case 'event':
         return 'Evento';
+      case 'meeting':
+        return 'Reunião';
       default:
         return 'Nota';
     }
@@ -255,6 +256,7 @@ export const AdminControle: React.FC = () => {
                   ${hasObservations ? 'hover:shadow-md' : ''}
                 `}
                 onClick={() => handleOpenModal(day.dateStr)}
+                style={{ height: 'auto' }}
               >
                 <div className="flex items-center justify-between mb-1">
                   <span
@@ -276,14 +278,14 @@ export const AdminControle: React.FC = () => {
                 </div>
 
                 {/* Lista de observações */}
-                <div className="space-y-1 mt-2">
-                  {observations.slice(0, 2).map((obs) => {
+                <div className="space-y-1 mt-2 flex flex-col gap-1">
+                  {observations.slice(0, 3).map((obs) => {
                     const designer = designers.find(d => d.id === obs.designerId);
                     return (
                       <div
                         key={obs.id}
                         className={`
-                          text-[10px] px-1.5 py-0.5 rounded border truncate
+                          text-[10px] px-1.5 py-0.5 rounded border break-words
                           ${getTypeColor(obs.type || 'note')}
                         `}
                         onClick={(e) => {
@@ -293,13 +295,13 @@ export const AdminControle: React.FC = () => {
                         title={`${designer?.name || obs.designerName || 'Designer'}: ${obs.note}`}
                       >
                         <span className="font-medium">{getTypeLabel(obs.type || 'note')}:</span>{' '}
-                        {designer?.name?.split(' - ')[1] || designer?.name || obs.designerName || 'Designer'}
+                        <span className="break-words">{designer?.name?.split(' - ')[1] || designer?.name || obs.designerName || 'Designer'}</span>
                       </div>
                     );
                   })}
-                  {observations.length > 2 && (
+                  {observations.length > 3 && (
                     <div className="text-[10px] text-slate-500 dark:text-slate-400 px-1">
-                      +{observations.length - 2} mais
+                      +{observations.length - 3} mais
                     </div>
                   )}
                 </div>
@@ -365,12 +367,16 @@ export const AdminControle: React.FC = () => {
                 </label>
                 <select
                   value={type}
-                  onChange={(e) => setType(e.target.value as 'absence' | 'event' | 'note')}
+                  onChange={(e) => {
+                    const newType = e.target.value as 'absence' | 'event' | 'note' | 'meeting';
+                    setType(newType);
+                  }}
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-[#280FFF] focus:border-transparent"
                 >
                   <option value="note">Nota</option>
                   <option value="absence">Falta</option>
                   <option value="event">Evento</option>
+                  <option value="meeting">Reunião</option>
                 </select>
               </div>
 

@@ -20,6 +20,20 @@ interface CustomTooltipProps {
 const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label, isDark, formatter }) => {
   if (!active || !payload || payload.length === 0) return null;
 
+  // Calcular o total de todos os valores
+  const total = payload.reduce((sum, entry) => {
+    const value = typeof entry.value === 'number' ? entry.value : Number(entry.value) || 0;
+    return sum + value;
+  }, 0);
+
+  // Determinar a unidade (Artes ou Pontos) baseado no primeiro item
+  const firstEntry = payload[0];
+  let unit = 'Artes';
+  if (formatter) {
+    const [, formattedUnit] = formatter(firstEntry.value, firstEntry.name);
+    unit = formattedUnit || 'Artes';
+  }
+
   return (
     <div
       className={`
@@ -53,6 +67,20 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label, i
             </div>
           );
         })}
+        {/* Linha separadora e total */}
+        {payload.length > 1 && (
+          <>
+            <div className={`border-t ${isDark ? 'border-gray-600' : 'border-gray-200'} my-1.5`} />
+            <div className="flex items-center gap-2 text-xs pt-0.5">
+              <span className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                Total:
+              </span>
+              <span className={`font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                {total} {unit}
+              </span>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -189,21 +189,35 @@ export const DesignerDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4 mb-2">
-        <div 
-          className="w-14 h-14 rounded-full flex items-center justify-center text-white font-semibold text-base shadow-md"
-          style={{ backgroundColor: getAvatarBg() }}
-        >
-          {currentUser ? getInitials(currentUser.name) : 'U'}
+      <div className="flex items-center justify-between gap-4 mb-2">
+        <div className="flex items-center gap-4">
+          <div 
+            className="w-14 h-14 rounded-full flex items-center justify-center text-white font-semibold text-base shadow-md"
+            style={{ backgroundColor: getAvatarBg() }}
+          >
+            {currentUser ? getInitials(currentUser.name) : 'U'}
+          </div>
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-900 dark:text-white mb-1">
+              Olá, {currentUser?.name?.split(' - ')[1] || currentUser?.name?.split(' ')[0]}
+            </h1>
+            <p className="text-slate-500 dark:text-slate-400 text-sm">
+              {dayName}, {dateStr}
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900 dark:text-white mb-1">
-            Olá, {currentUser?.name?.split(' - ')[1] || currentUser?.name?.split(' ')[0]}
-          </h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm">
-            {dayName}, {dateStr}
-          </p>
-        </div>
+        {/* Tag de Nível */}
+        {currentUser?.level && (
+          <div className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide ${
+            currentUser.level === 'senior' 
+              ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700'
+              : currentUser.level === 'pleno'
+              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-700'
+              : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-700'
+          }`}>
+            {currentUser.level === 'senior' ? 'Senior' : currentUser.level === 'pleno' ? 'Pleno' : 'Junior'}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -350,12 +350,11 @@ export const AdminDashboard: React.FC = () => {
     return filtered;
   }, [demands, selectedDesigner, dateFilter, customStartDate, customEndDate]);
 
-  // Função para determinar a classificação baseada na meta semanal
-  const getArtsPerformance = (totalArts: number, dailyGoal: number): 'ruim' | 'medio' | 'bom' => {
-    if (!dailyGoal || dailyGoal <= 0) return 'medio'; // Se não houver meta, retorna médio
+  // Função para determinar a classificação baseada na porcentagem do período
+  const getArtsPerformance = (totalArts: number, periodGoal: number): 'ruim' | 'medio' | 'bom' => {
+    if (!periodGoal || periodGoal <= 0) return 'medio'; // Se não houver meta, retorna médio
     
-    const weeklyGoal = dailyGoal * 6; // Meta semanal (6 dias úteis)
-    const percentage = (totalArts / weeklyGoal) * 100;
+    const percentage = (totalArts / periodGoal) * 100;
     
     if (percentage < 50) return 'ruim'; // Menos da metade
     if (percentage < 100) return 'medio'; // Metade até 99%
@@ -782,7 +781,7 @@ export const AdminDashboard: React.FC = () => {
                   
                   const performance = selectedDesigner === 'all' || !selectedDesigner
                     ? 'medio' // Sem cor quando todos os designers
-                    : getArtsPerformance(stats.totalArts, settings.dailyArtGoal || 0);
+                    : getArtsPerformance(stats.totalArts, periodGoal);
                   
                   return (
                     <p className={`text-2xl sm:text-3xl font-bold mt-1.5 sm:mt-2 break-words ${

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { User, ArtType, Demand, WorkSession, Feedback, Lesson, LessonProgress, SystemSettings, TimeFilter, AdminFilters, Award, UsefulLink, Tag, CalendarObservation } from '../types';
+import { User, ArtType, Demand, WorkSession, Feedback, Lesson, LessonProgress, SystemSettings, TimeFilter, AdminFilters, Award, UsefulLink, Tag, CalendarObservation, Task } from '../types';
 
 const API_URL = '';
 
@@ -18,6 +18,7 @@ interface AppContextType {
   usefulLinks: UsefulLink[];
   tags: Tag[];
   calendarObservations: CalendarObservation[];
+  tasks: Task[];
   settings: SystemSettings;
   adminFilters: AdminFilters;
   loading: boolean;
@@ -61,6 +62,9 @@ interface AppContextType {
   addCalendarObservation: (observation: Omit<CalendarObservation, 'id' | 'createdAt' | 'updatedAt' | 'designerName'>) => Promise<void>;
   updateCalendarObservation: (id: string, observation: Partial<CalendarObservation>) => Promise<void>;
   deleteCalendarObservation: (id: string) => Promise<void>;
+  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updateTask: (id: string, task: Partial<Task>) => Promise<void>;
+  deleteTask: (id: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -108,6 +112,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [usefulLinks, setUsefulLinks] = useState<UsefulLink[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [calendarObservations, setCalendarObservations] = useState<CalendarObservation[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [settings, setSettings] = useState<SystemSettings>({});
   const [loading, setLoading] = useState(true);
   const [adminFilters, setAdminFilters] = useState<AdminFilters>({
@@ -194,6 +199,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (linksRes.ok) setUsefulLinks(await linksRes.json());
       if (tagsRes.ok) setTags(await tagsRes.json());
       if (observationsRes.ok) setCalendarObservations(await observationsRes.json());
+      const tasksRes = await fetch(`${API_URL}/api/tasks`);
+      if (tasksRes.ok) setTasks(await tasksRes.json());
       if (settingsRes.ok) setSettings(await settingsRes.json());
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -820,6 +827,43 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setCalendarObservations(prev => prev.filter(o => o.id !== id));
   };
 
+  const addTask = async (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const res = await fetch(`${API_URL}/api/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(task)
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Erro ao criar tarefa' }));
+      throw new Error(error.error || 'Erro ao criar tarefa');
+    }
+    const newTask = await res.json();
+    setTasks(prev => [newTask, ...prev]);
+  };
+
+  const updateTask = async (id: string, task: Partial<Task>) => {
+    const res = await fetch(`${API_URL}/api/tasks/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(task)
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Erro ao atualizar tarefa' }));
+      throw new Error(error.error || 'Erro ao atualizar tarefa');
+    }
+    const updatedTask = await res.json();
+    setTasks(prev => prev.map(t => t.id === id ? updatedTask : t));
+  };
+
+  const deleteTask = async (id: string) => {
+    const res = await fetch(`${API_URL}/api/tasks/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Erro ao deletar tarefa' }));
+      throw new Error(error.error || 'Erro ao deletar tarefa');
+    }
+    setTasks(prev => prev.filter(t => t.id !== id));
+  };
+
   const refreshData = useCallback(fetchData, []);
 
   return (
@@ -836,6 +880,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       usefulLinks,
       tags,
       calendarObservations,
+      tasks,
       settings,
       adminFilters,
       loading,
@@ -878,7 +923,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       refreshData,
       addCalendarObservation,
       updateCalendarObservation,
-      deleteCalendarObservation
+      deleteCalendarObservation,
+      addTask,
+      updateTask,
+      deleteTask
     }}>
       {children}
     </AppContext.Provider>
