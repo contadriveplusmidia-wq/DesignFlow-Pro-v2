@@ -2,7 +2,7 @@
 
 ## Overview
 
-DesignFlow Pro is a design team productivity tracking system with role-based dashboards for designers and administrators. The application tracks design work sessions, demands, feedback, lessons, and generates comprehensive analytics. It features a React frontend with a Node.js/Express backend using PostgreSQL for data persistence.
+DesignFlow Pro is a design team productivity tracking system with role-based dashboards for designers and administrators. The application tracks design work sessions, demands, feedback, lessons, and generates comprehensive analytics. It features a React frontend with a Node.js/Express backend using SQLite for data persistence.
 
 The system enables designers to log their daily work (demands with multiple art types, quantities, and variations), while administrators can monitor team productivity, manage feedback, create educational content, and customize system settings.
 
@@ -44,15 +44,14 @@ Preferred communication style: Simple, everyday language.
 **Technology Stack:**
 - Node.js with Express 5 (single file architecture)
 - TypeScript with tsx runtime
-- PostgreSQL database with pg driver
+- SQLite database with better-sqlite3 driver
 - bcryptjs for password hashing
 - CORS enabled for cross-origin requests
 
 **API Design:**
 - RESTful API structure at `/api/*` endpoints
-- Single serverless function (`/api/index.ts`) for Vercel Hobby plan compatibility
-- All routes in one Express app exported as Vercel handler
-- Works both locally (Express server on port 3001) and on Vercel (serverless)
+- All routes in one Express app
+- Express server runs on port 3001
 
 **API Endpoints:**
 - `POST /api/auth/login` - User authentication
@@ -114,36 +113,6 @@ Preferred communication style: Simple, everyday language.
 
 ## Deployment
 
-### Vercel Deployment
-
-**Configuration (`vercel.json`):**
-```json
-{
-  "buildCommand": "vite build",
-  "outputDirectory": "dist",
-  "framework": "vite",
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" }
-  ],
-  "functions": {
-    "api/index.ts": {
-      "memory": 1024,
-      "maxDuration": 10
-    }
-  }
-}
-```
-
-**Database Setup:**
-1. Create a Neon PostgreSQL database
-2. Import `database_export.sql` schema
-3. Add `DATABASE_URL` to Vercel environment variables
-
-**Deploy Steps:**
-1. Connect repository to Vercel
-2. Configure environment variables (DATABASE_URL)
-3. Deploy - Vercel auto-detects Vite and the single serverless function
-
 ### Local Development
 
 Run `npm run dev` which starts:
@@ -163,7 +132,7 @@ Run `npm run dev` which starts:
 
 **Backend:**
 - `express`: Web framework
-- `pg`: PostgreSQL client
+- `better-sqlite3`: SQLite client
 - `bcryptjs`: Password hashing
 - `cors`: Cross-origin resource sharing
 
@@ -177,11 +146,10 @@ Run `npm run dev` which starts:
 
 ### Database
 
-**PostgreSQL:**
+**SQLite:**
 - Primary data store for all application data
-- Connection via `DATABASE_URL` environment variable
-- SSL enabled for production (Neon/Vercel)
-- Schema available in `database_export.sql`
+- Local file-based database (`database.db`)
+- WAL mode enabled for better performance
 
 ### Asset Handling
 
@@ -204,15 +172,12 @@ Run `npm run dev` which starts:
 ### Environment Configuration
 
 **Required Environment Variables:**
-- `DATABASE_URL`: PostgreSQL connection string (with SSL for production)
+- `GEMINI_API_KEY`: API key for Gemini AI (optional, for AI features)
 
 ## Recent Changes
 
-- Consolidated all serverless functions into single `/api/index.ts` file
-- Compatible with Vercel Hobby plan (max 12 functions limit)
-- Updated `vercel.json` with rewrites to route all `/api/*` to single function
-- Removed separate serverless function files
-- Backend works both locally (Express server) and on Vercel (serverless)
+- Migrated from PostgreSQL to SQLite for local development and deployment
+- Backend runs as Express server on port 3001
 - Added localStorage persistence for user session (prevents logout on refresh)
 - Automatic work-session registration when designers log in
 - Password change functionality in admin settings (Security tab)

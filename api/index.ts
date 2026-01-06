@@ -722,13 +722,29 @@ async function generateExecutionCode(timestamp: number, userId: string, excludeD
   // - Apenas do dia atual (startTs até endTs)
   // - Apenas do designer específico (user_id = userId)
   // - Criadas antes da atual (timestamp < currentTs)
+  // - EXCLUIR demandas que são apenas "Ajustes" (não devem contar para a sequência)
+  // Contar apenas demandas que têm pelo menos um item que NÃO é "Ajustes"
   let countQuery = useSQLite
-    ? 'SELECT COUNT(*) as count FROM demands WHERE timestamp >= ? AND timestamp <= ? AND timestamp < ? AND user_id = ?'
-    : 'SELECT COUNT(*) as count FROM demands WHERE timestamp >= $1 AND timestamp <= $2 AND timestamp < $3 AND user_id = $4';
+    ? `SELECT COUNT(DISTINCT d.id) as count 
+       FROM demands d
+       WHERE d.timestamp >= ? AND d.timestamp <= ? AND d.timestamp < ? AND d.user_id = ?
+       AND EXISTS (
+         SELECT 1 FROM demand_items di 
+         WHERE di.demand_id = d.id 
+         AND LOWER(TRIM(di.art_type_label)) != 'ajustes'
+       )`
+    : `SELECT COUNT(DISTINCT d.id) as count 
+       FROM demands d
+       WHERE d.timestamp >= $1 AND d.timestamp <= $2 AND d.timestamp < $3 AND d.user_id = $4
+       AND EXISTS (
+         SELECT 1 FROM demand_items di 
+         WHERE di.demand_id = d.id 
+         AND LOWER(TRIM(di.art_type_label)) != 'ajustes'
+       )`;
   const countParams: any[] = [startTs, endTimestamp, currentTs, userId];
   
   if (excludeDemandId) {
-    countQuery += useSQLite ? ' AND id != ?' : ' AND id != $5';
+    countQuery += useSQLite ? ' AND d.id != ?' : ' AND d.id != $5';
     countParams.push(excludeDemandId);
   }
   
@@ -791,10 +807,27 @@ async function reorderExecutionCodes(deletedTimestamp: number, userId: string) {
   
   // Buscar todas as demandas do DESIGNER no dia ordenadas por timestamp (ordem de criação)
   // IMPORTANTE: Apenas do dia específico E apenas do designer específico
+  // EXCLUIR demandas que são apenas "Ajustes" (não devem ter código de execução)
   const demandsResult = await query(
     useSQLite
-      ? 'SELECT id, timestamp FROM demands WHERE timestamp >= ? AND timestamp <= ? AND user_id = ? ORDER BY timestamp ASC'
-      : 'SELECT id, timestamp FROM demands WHERE timestamp >= $1 AND timestamp <= $2 AND user_id = $3 ORDER BY timestamp ASC',
+      ? `SELECT d.id, d.timestamp 
+         FROM demands d
+         WHERE d.timestamp >= ? AND d.timestamp <= ? AND d.user_id = ?
+         AND EXISTS (
+           SELECT 1 FROM demand_items di 
+           WHERE di.demand_id = d.id 
+           AND LOWER(TRIM(di.art_type_label)) != 'ajustes'
+         )
+         ORDER BY d.timestamp ASC`
+      : `SELECT d.id, d.timestamp 
+         FROM demands d
+         WHERE d.timestamp >= $1 AND d.timestamp <= $2 AND d.user_id = $3
+         AND EXISTS (
+           SELECT 1 FROM demand_items di 
+           WHERE di.demand_id = d.id 
+           AND LOWER(TRIM(di.art_type_label)) != 'ajustes'
+         )
+         ORDER BY d.timestamp ASC`,
     [startTimestamp, endTimestamp, userId]
   );
   
@@ -913,14 +946,24 @@ app.post('/api/demands', async (req: Request, res: Response) => {
       ? providedTimestamp 
       : Date.now();
     
+    // Verificar se a demanda contém apenas "Ajustes" - se sim, não gerar código de execução
+    const isOnlyAdjustments = items && items.length > 0 && items.every((item: any) => 
+      item.artTypeLabel && item.artTypeLabel.toLowerCase().trim() === 'ajustes'
+    );
+    
     // Gerar código de execução ANTES de iniciar a transação
     // IMPORTANTE: Passar userId para contar apenas demandas deste designer
+    // NÃO gerar código se for apenas "Ajustes"
     let executionCode: string | null = null;
-    try {
-      executionCode = await generateExecutionCode(timestamp, userId);
-    } catch (codeError: any) {
-      console.warn('[CREATE DEMAND] Erro ao gerar código de execução:', codeError?.message);
-      // Continuar sem código se houver erro
+    if (!isOnlyAdjustments) {
+      try {
+        executionCode = await generateExecutionCode(timestamp, userId);
+      } catch (codeError: any) {
+        console.warn('[CREATE DEMAND] Erro ao gerar código de execução:', codeError?.message);
+        // Continuar sem código se houver erro
+      }
+    } else {
+      console.log('[CREATE DEMAND] Demanda contém apenas "Ajustes", não gerando código de execução');
     }
     
     if (useSQLite && db) {
@@ -1026,18 +1069,30 @@ app.put('/api/demands/:id', async (req: Request, res: Response) => {
     const timestamp = Number(currentDemand.timestamp);
     const demandUserId = currentDemand.user_id;
     
+    // Verificar se a demanda contém apenas "Ajustes" - se sim, não gerar código de execução
+    const isOnlyAdjustments = items && items.length > 0 && items.every((item: any) => 
+      item.artTypeLabel && item.artTypeLabel.toLowerCase().trim() === 'ajustes'
+    );
+    
     // Recalcular código de execução (código muda ao editar)
     // IMPORTANTE: Passar userId para contar apenas demandas deste designer
+    // NÃO gerar código se for apenas "Ajustes"
     let executionCode: string | null = null;
-    try {
-      executionCode = await generateExecutionCode(timestamp, demandUserId, id);
-    } catch (codeError: any) {
-      console.warn('[UPDATE DEMAND] Erro ao recalcular código de execução:', codeError?.message);
+    if (!isOnlyAdjustments) {
+      try {
+        executionCode = await generateExecutionCode(timestamp, demandUserId, id);
+      } catch (codeError: any) {
+        console.warn('[UPDATE DEMAND] Erro ao recalcular código de execução:', codeError?.message);
+      }
+    } else {
+      console.log('[UPDATE DEMAND] Demanda contém apenas "Ajustes", não gerando código de execução');
+      // Se for apenas ajustes, remover o código de execução existente
+      executionCode = null;
     }
     
     if (useSQLite && db) {
       const transaction = db.transaction(() => {
-        // Atualizar dados da demanda (incluindo código se existir)
+        // Atualizar dados da demanda (incluindo código se existir, ou removendo se for apenas ajustes)
         if (executionCode) {
           try {
             db.prepare(
@@ -1054,9 +1109,21 @@ app.put('/api/demands/:id', async (req: Request, res: Response) => {
             }
           }
         } else {
-          db.prepare(
-            'UPDATE demands SET total_quantity = ?, total_points = ? WHERE id = ?'
-          ).run(totalQuantity, totalPoints, id);
+          // Se não há código (incluindo quando é apenas ajustes), atualizar e remover código existente
+          try {
+            db.prepare(
+              'UPDATE demands SET total_quantity = ?, total_points = ?, execution_code = NULL WHERE id = ?'
+            ).run(totalQuantity, totalPoints, id);
+          } catch (updateError: any) {
+            // Se coluna não existir, atualizar sem código
+            if (updateError.message?.includes('no such column')) {
+              db.prepare(
+                'UPDATE demands SET total_quantity = ?, total_points = ? WHERE id = ?'
+              ).run(totalQuantity, totalPoints, id);
+            } else {
+              throw updateError;
+            }
+          }
         }
         
         // Remover itens antigos
@@ -2682,36 +2749,124 @@ app.delete('/api/designer-notifications/:id', async (req: Request, res: Response
 // Criar tabela se não existir (SQLite)
 if (useSQLite && db) {
   try {
+    // Verificar se a tabela calendar_observations já existe
+    const tableExists = db.prepare(`
+      SELECT name FROM sqlite_master 
+      WHERE type='table' AND name='calendar_observations'
+    `).get();
+    
+    if (tableExists) {
+      // Tabela existe - verificar se precisa atualizar a constraint
+      // SQLite não permite alterar CHECK constraints diretamente, então precisamos recriar
+      try {
+        // Verificar se há dados com tipo 'no_demand' que precisam ser preservados
+        const hasNoDemand = db.prepare(`
+          SELECT COUNT(*) as count FROM calendar_observations WHERE type = 'no_demand'
+        `).get() as { count: number };
+        
+        // Criar backup dos dados
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS calendar_observations_backup AS 
+          SELECT * FROM calendar_observations;
+        `);
+        
+        // Dropar tabela antiga
+        db.exec('DROP TABLE IF EXISTS calendar_observations');
+        
+        // Recriar com constraint atualizada incluindo 'no_demand'
+        db.exec(`
+          CREATE TABLE calendar_observations (
+            id VARCHAR(50) PRIMARY KEY,
+            designer_id VARCHAR(50) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            date VARCHAR(10) NOT NULL,
+            note TEXT NOT NULL,
+            type VARCHAR(20) CHECK (type IN ('absence', 'event', 'note', 'meeting', 'no_demand')) DEFAULT 'note',
+            created_at BIGINT NOT NULL,
+            updated_at BIGINT NOT NULL,
+            UNIQUE(designer_id, date)
+          );
+        `);
+        
+        // Restaurar dados do backup
+        db.exec(`
+          INSERT INTO calendar_observations 
+          SELECT * FROM calendar_observations_backup;
+        `);
+        
+        // Remover backup
+        db.exec('DROP TABLE IF EXISTS calendar_observations_backup');
+        
+        console.log('✅ Tabela calendar_observations atualizada com tipo no_demand');
+      } catch (migrationError: any) {
+        // Se a migração falhar, tentar criar normalmente
+        console.warn('⚠️  Erro na migração, tentando criar tabela normalmente:', migrationError.message);
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS calendar_observations (
+            id VARCHAR(50) PRIMARY KEY,
+            designer_id VARCHAR(50) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            date VARCHAR(10) NOT NULL,
+            note TEXT NOT NULL,
+            type VARCHAR(20) CHECK (type IN ('absence', 'event', 'note', 'meeting', 'no_demand')) DEFAULT 'note',
+            created_at BIGINT NOT NULL,
+            updated_at BIGINT NOT NULL,
+            UNIQUE(designer_id, date)
+          );
+        `);
+      }
+    } else {
+      // Tabela não existe - criar normalmente
+      db.exec(`
+        CREATE TABLE calendar_observations (
+          id VARCHAR(50) PRIMARY KEY,
+          designer_id VARCHAR(50) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          date VARCHAR(10) NOT NULL,
+          note TEXT NOT NULL,
+          type VARCHAR(20) CHECK (type IN ('absence', 'event', 'note', 'meeting', 'no_demand')) DEFAULT 'note',
+          created_at BIGINT NOT NULL,
+          updated_at BIGINT NOT NULL,
+          UNIQUE(designer_id, date)
+        );
+      `);
+    }
+    
+    // Criar índices
     db.exec(`
-      CREATE TABLE IF NOT EXISTS calendar_observations (
-        id VARCHAR(50) PRIMARY KEY,
-        designer_id VARCHAR(50) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        date VARCHAR(10) NOT NULL,
-        note TEXT NOT NULL,
-        type VARCHAR(20) CHECK (type IN ('absence', 'event', 'note', 'meeting')) DEFAULT 'note',
-        created_at BIGINT NOT NULL,
-        updated_at BIGINT NOT NULL,
-        UNIQUE(designer_id, date)
-      );
       CREATE INDEX IF NOT EXISTS idx_calendar_observations_date ON calendar_observations(date);
-      
-      -- Tabela de tarefas
-      CREATE TABLE IF NOT EXISTS tasks (
-        id VARCHAR(50) PRIMARY KEY,
-        title TEXT NOT NULL,
-        completed INTEGER DEFAULT 0,
-        due_date VARCHAR(10),
-        priority VARCHAR(10) CHECK (priority IN ('low', 'medium', 'high')) DEFAULT 'low',
-        created_at BIGINT NOT NULL,
-        updated_at BIGINT NOT NULL,
-        completed_at BIGINT
-      );
-      CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(completed);
-      CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
-      CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority);
-      CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
       CREATE INDEX IF NOT EXISTS idx_calendar_observations_designer ON calendar_observations(designer_id);
     `);
+    
+     // Criar tabela de tarefas
+     db.exec(`
+       CREATE TABLE IF NOT EXISTS tasks (
+         id VARCHAR(50) PRIMARY KEY,
+         title TEXT NOT NULL,
+         completed INTEGER DEFAULT 0,
+         due_date VARCHAR(10),
+         priority VARCHAR(10) CHECK (priority IN ('low', 'medium', 'high')) DEFAULT 'low',
+         created_at BIGINT NOT NULL,
+         updated_at BIGINT NOT NULL,
+         completed_at BIGINT
+       );
+       CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(completed);
+       CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
+       CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority);
+       CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
+     `);
+     
+     // Criar tabela de ajustes de demandas
+     db.exec(`
+       CREATE TABLE IF NOT EXISTS demand_adjustments (
+         id VARCHAR(50) PRIMARY KEY,
+         demand_id VARCHAR(50) NOT NULL REFERENCES demands(id) ON DELETE CASCADE,
+         demand_item_index INTEGER NOT NULL,
+         manager_name TEXT NOT NULL,
+         reason TEXT NOT NULL,
+         image_url TEXT NOT NULL,
+         created_at BIGINT NOT NULL
+       );
+       CREATE INDEX IF NOT EXISTS idx_demand_adjustments_demand_id ON demand_adjustments(demand_id);
+     `);
+    
     console.log('✅ Tabela calendar_observations e tasks criadas/verificadas');
   } catch (error: any) {
     console.error('⚠️  Erro ao criar tabelas:', error.message);
@@ -2822,7 +2977,7 @@ app.post('/api/calendar-observations', async (req: Request, res: Response) => {
     }
     
     // Validar tipo
-    const validType = type && ['absence', 'event', 'note', 'meeting'].includes(type) ? type : 'note';
+    const validType = type && ['absence', 'event', 'note', 'meeting', 'no_demand'].includes(type) ? type : 'note';
     
     // Verificar se o designer existe
     const designerExists = await queryOne(
@@ -2886,7 +3041,7 @@ app.post('/api/calendar-observations', async (req: Request, res: Response) => {
     }
     
     if (error?.code === 'SQLITE_CONSTRAINT_CHECK') {
-      return res.status(400).json({ error: `Tipo de observação inválido. Tipos permitidos: absence, event, note, meeting. Tipo recebido: ${req.body?.type || 'não informado'}` });
+      return res.status(400).json({ error: `Tipo de observação inválido. Tipos permitidos: absence, event, note, meeting, no_demand. Tipo recebido: ${req.body?.type || 'não informado'}` });
     }
     
     if (error?.code === 'SQLITE_CONSTRAINT_FOREIGNKEY' || error?.message?.includes('FOREIGN KEY')) {
@@ -2923,7 +3078,7 @@ app.put('/api/calendar-observations/:id', async (req: Request, res: Response) =>
     }
     
     if (type !== undefined) {
-      const validType = ['absence', 'event', 'note', 'meeting'].includes(type) ? type : 'note';
+      const validType = ['absence', 'event', 'note', 'meeting', 'no_demand'].includes(type) ? type : 'note';
       updates.push(useSQLite ? 'type = ?' : `type = $${params.length + 1}`);
       params.push(validType);
     }
@@ -3165,6 +3320,81 @@ app.delete('/api/tasks/:id', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Erro ao deletar tarefa:', error);
     return res.status(500).json({ error: 'Erro ao deletar tarefa', details: error?.message });
+  }
+});
+
+// ============ DEMAND ADJUSTMENTS ============
+// GET /api/demand-adjustments/:demandId - Buscar ajustes de uma demanda
+app.get('/api/demand-adjustments/:demandId', async (req: Request, res: Response) => {
+  try {
+    const { demandId } = req.params;
+    const rows = await query(
+      useSQLite
+        ? 'SELECT * FROM demand_adjustments WHERE demand_id = ? ORDER BY created_at DESC'
+        : 'SELECT * FROM demand_adjustments WHERE demand_id = $1 ORDER BY created_at DESC',
+      [demandId]
+    );
+    return res.json(rows.map(row => ({
+      id: row.id,
+      demandId: row.demand_id,
+      demandItemIndex: row.demand_item_index,
+      managerName: row.manager_name,
+      reason: row.reason,
+      imageUrl: row.image_url,
+      createdAt: row.created_at
+    })));
+  } catch (error: any) {
+    console.error('Erro ao buscar ajustes:', error);
+    return res.status(500).json({ error: 'Erro ao buscar ajustes', details: error?.message });
+  }
+});
+
+// POST /api/demand-adjustments - Criar novo ajuste
+app.post('/api/demand-adjustments', async (req: Request, res: Response) => {
+  try {
+    const { demandId, demandItemIndex, managerName, reason, imageUrl } = req.body;
+    
+    if (!demandId || demandItemIndex === undefined || !managerName || !reason || !imageUrl) {
+      return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
+    }
+    
+    const id = `adj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const createdAt = Date.now();
+    
+    await execute(
+      useSQLite
+        ? 'INSERT INTO demand_adjustments (id, demand_id, demand_item_index, manager_name, reason, image_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        : 'INSERT INTO demand_adjustments (id, demand_id, demand_item_index, manager_name, reason, image_url, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [id, demandId, demandItemIndex, managerName, reason, imageUrl, createdAt]
+    );
+    
+    return res.json({
+      id,
+      demandId,
+      demandItemIndex,
+      managerName,
+      reason,
+      imageUrl,
+      createdAt
+    });
+  } catch (error: any) {
+    console.error('Erro ao criar ajuste:', error);
+    return res.status(500).json({ error: 'Erro ao criar ajuste', details: error?.message });
+  }
+});
+
+// DELETE /api/demand-adjustments/:id - Deletar ajuste
+app.delete('/api/demand-adjustments/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await execute(
+      useSQLite ? 'DELETE FROM demand_adjustments WHERE id = ?' : 'DELETE FROM demand_adjustments WHERE id = $1',
+      [id]
+    );
+    return res.json({ success: true });
+  } catch (error: any) {
+    console.error('Erro ao deletar ajuste:', error);
+    return res.status(500).json({ error: 'Erro ao deletar ajuste', details: error?.message });
   }
 });
 

@@ -62,6 +62,14 @@ export const AdminSettings: React.FC = () => {
   const [draggedItem, setDraggedItem] = useState<string | null>(null);
 
   const designers = users.filter(u => u.role === 'DESIGNER');
+  
+  // Função helper para normalizar o valor de active
+  const isUserActive = (user: any): boolean => {
+    if (user.active === true || user.active === 1 || user.active === '1' || user.active === 't' || user.active === 'true') {
+      return true;
+    }
+    return false;
+  };
 
   const handleSaveBrand = async () => {
     setSaving(true);
@@ -159,10 +167,53 @@ export const AdminSettings: React.FC = () => {
 
   const handleToggleActive = async (id: string) => {
     const user = users.find(u => u.id === id);
-    if (!user) return;
+    if (!user) {
+      console.error('Usuário não encontrado:', id);
+      alert('Erro: Usuário não encontrado. Recarregue a página e tente novamente.');
+      return;
+    }
     
-    const newActiveStatus = !user.active;
-    await updateUser(id, { active: newActiveStatus });
+    // Verificar se há erros antes de permitir a alteração
+    const currentActive = isUserActive(user);
+    const newActiveStatus = !currentActive;
+    
+    // Se está tentando ativar um designer que está inativo, pedir confirmação
+    if (!currentActive && newActiveStatus) {
+      const confirmMessage = `Tem certeza que deseja ativar o designer "${user.name}"?`;
+      if (!confirm(confirmMessage)) {
+        return; // Usuário cancelou a operação
+      }
+    }
+    
+    try {
+      console.log('Alterando status do designer:', {
+        id,
+        nome: user.name,
+        activeAtual: user.active,
+        currentActive,
+        newActiveStatus
+      });
+      
+      // Usar updateUser do contexto que já faz a atualização no servidor e no estado local
+      await updateUser(id, { active: newActiveStatus });
+      
+      // Aguardar um pouco para garantir que a atualização foi processada
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Recarregar dados do servidor para garantir sincronização completa
+      await refreshData();
+      
+      console.log('Status alterado com sucesso:', newActiveStatus);
+    } catch (error: any) {
+      console.error('Erro ao alterar status do designer:', error);
+      console.error('Detalhes do erro:', {
+        message: error.message,
+        stack: error.stack,
+        userId: id,
+        userName: user.name
+      });
+      alert(`Erro ao alterar status do designer "${user.name}":\n\n${error.message || 'Erro desconhecido. Tente recarregar a página e tentar novamente.'}`);
+    }
   };
 
   const handleDeleteUser = async (id: string) => {
@@ -484,9 +535,11 @@ export const AdminSettings: React.FC = () => {
           </div>
 
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 divide-y divide-slate-200 dark:divide-slate-800">
-            {designers.map(user => (
-              <div key={user.id} className={`p-4 flex items-center justify-between ${!user.active ? 'opacity-50' : ''}`}>
-                <div className="flex items-center gap-3">
+            {designers.map(user => {
+              const isActive = isUserActive(user);
+              return (
+              <div key={user.id} className="p-4 flex items-center justify-between relative">
+                <div className={`flex items-center gap-3 ${!isActive ? 'opacity-50' : ''}`}>
                   <div 
                     className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold"
                     style={{ backgroundColor: user.avatarColor || '#4F46E5' }}
@@ -495,12 +548,12 @@ export const AdminSettings: React.FC = () => {
                   </div>
                   <div>
                     <p className="font-medium text-slate-900 dark:text-white">{user.name}</p>
-                    <p className="text-sm text-slate-500">{user.active ? 'Ativo' : 'Inativo'}</p>
+                    <p className="text-sm text-slate-500">{isActive ? 'Ativo' : 'Inativo'}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   {/* Seletor de Nível */}
-                  {user.active && (
+                  {isActive && (
                     <select
                       value={user.level || ''}
                       onChange={async (e) => {
@@ -525,22 +578,28 @@ export const AdminSettings: React.FC = () => {
                   
                   {/* Toggle Ativo/Inativo */}
                   <button
-                    onClick={() => handleToggleActive(user.id)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 ${
-                      user.active 
-                        ? 'bg-brand-600' 
-                        : 'bg-slate-300 dark:bg-slate-600'
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleToggleActive(user.id);
+                    }}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 cursor-pointer z-10 ${
+                      isActive 
+                        ? 'bg-brand-600 hover:bg-brand-700' 
+                        : 'bg-slate-300 dark:bg-slate-600 hover:bg-slate-400 dark:hover:bg-slate-500'
                     }`}
-                    title={user.active ? 'Desativar designer' : 'Ativar designer'}
+                    title={isActive ? 'Desativar designer' : 'Ativar designer'}
+                    type="button"
+                    disabled={false}
                   >
                     <span
                       className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        user.active ? 'translate-x-6' : 'translate-x-1'
+                        isActive ? 'translate-x-6' : 'translate-x-1'
                       }`}
                     />
                   </button>
                   
-                  {user.active && (
+                  {isActive && (
                     <button
                       onClick={() => handleEditUser(user)}
                       className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
@@ -550,7 +609,7 @@ export const AdminSettings: React.FC = () => {
                     </button>
                   )}
                   
-                  {!user.active && (
+                  {!isActive && (
                     <button
                       onClick={() => handleDeleteUser(user.id)}
                       className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
@@ -561,7 +620,8 @@ export const AdminSettings: React.FC = () => {
                   )}
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         </div>
       )}

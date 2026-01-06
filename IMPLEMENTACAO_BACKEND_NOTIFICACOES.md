@@ -79,14 +79,11 @@ Também foi atualizado o endpoint de settings para incluir `faviconUrl`:
 
 ### 1. Criar a Tabela no Banco de Dados
 
-Execute o SQL no seu banco de dados (Neon, PostgreSQL, etc.):
+Execute o SQL no seu banco de dados SQLite:
 
 ```bash
-# Opção 1: Via SQL Editor do Neon/Vercel
+# Via SQL Editor do seu banco de dados
 # Copie o conteúdo de create_designer_notifications_table.sql e execute
-
-# Opção 2: Via psql (se tiver acesso direto)
-psql $DATABASE_URL -f create_designer_notifications_table.sql
 ```
 
 ### 2. Verificar Funcionamento

@@ -5,6 +5,7 @@ import { TimeFilter, WorkSessionRow, DemandItem, Demand } from '../types';
 import { HistoryCharts } from '../components/HistoryCharts';
 import { DateRangePicker } from '../components/DateRangePicker';
 import { DatePicker } from '../components/DatePicker';
+import { getArtsCountForGoal } from '../utils/demandHelpers';
 
 export const AdminHistory: React.FC = () => {
   const { users, demands, workSessions, artTypes, settings, adminFilters, setAdminFilters, addDemand, updateDemand, deleteDemand, refreshData } = useApp();
@@ -191,7 +192,7 @@ export const AdminHistory: React.FC = () => {
         d.timestamp < nextDay.getTime()
       );
 
-      const totalArts = dayDemands.reduce((acc, d) => acc + d.totalQuantity, 0);
+      const totalArts = dayDemands.reduce((acc, d) => acc + getArtsCountForGoal(d), 0);
       const totalPoints = dayDemands.reduce((acc, d) => acc + d.totalPoints, 0);
 
       return {
@@ -218,9 +219,9 @@ export const AdminHistory: React.FC = () => {
     return filtered.sort((a, b) => b.timestamp - a.timestamp);
   }, [demands, adminFilters, customStartDate, customEndDate]);
 
-  // Calcular soma total de artes do período selecionado
+  // Calcular soma total de artes do período selecionado (excluindo "Ajustes")
   const totalArts = useMemo(() => {
-    return filteredDemands.reduce((acc, d) => acc + d.totalQuantity, 0);
+    return filteredDemands.reduce((acc, d) => acc + getArtsCountForGoal(d), 0);
   }, [filteredDemands]);
 
   // Função para formatar data para input

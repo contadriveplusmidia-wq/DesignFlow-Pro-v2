@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { Target, Calendar, X } from 'lucide-react';
 import { Demand, User, SystemSettings } from '../types';
-import { DatePicker } from './DatePicker';
+import { DateRangePicker } from './DateRangePicker';
+import { getArtsCountForGoal, getAdjustmentsCount } from '../utils/demandHelpers';
 
 interface DayData {
   date: Date;
@@ -12,6 +13,7 @@ interface DayData {
     designerId: string;
     designerName: string;
     artsCount: number;
+    adjustmentsCount: number; // Quantidade de ajustes neste dia
     color: string;
     hitGoalToday?: boolean; // Indica se bateu a meta neste dia específico
   }>;
@@ -174,30 +176,33 @@ export const DailyGoalChart: React.FC<DailyGoalChartProps> = ({
           return demandTime >= dayStart.getTime() && demandTime <= dayEnd.getTime();
         });
 
-        // Agrupar por designer e calcular artes
-        const designerArts: Record<string, { name: string; count: number }> = {};
+        // Agrupar por designer e calcular artes e ajustes
+        const designerArts: Record<string, { name: string; count: number; adjustments: number }> = {};
         dayDemands.forEach(demand => {
           if (!designerArts[demand.userId]) {
             const designer = designers.find(des => des.id === demand.userId);
             designerArts[demand.userId] = {
               name: designer?.name.split(' - ')[1] || designer?.name || 'Designer',
-              count: 0
+              count: 0,
+              adjustments: 0
             };
           }
-          const quantity = Number(demand.totalQuantity) || 0;
-          designerArts[demand.userId].count += quantity;
+          designerArts[demand.userId].count += getArtsCountForGoal(demand);
+          designerArts[demand.userId].adjustments += getAdjustmentsCount(demand);
         });
 
         // Mostrar TODOS os designers que têm demandas na semana
         // Sempre mostrar a barra, mas ocultar o nome quando não bater a meta
         const designersForDay = designersWithDemandsThisWeek.map(designer => {
           const dayCount = Number(designerArts[designer.designerId]?.count || 0);
+          const adjustmentsCount = Number(designerArts[designer.designerId]?.adjustments || 0);
           const hitGoalToday = dayCount >= dailyGoal;
           
           return {
             designerId: designer.designerId,
             designerName: designer.designerName,
             artsCount: dayCount,
+            adjustmentsCount: adjustmentsCount,
             color: designer.color,
             hitGoalToday // Flag para indicar se bateu a meta neste dia específico
           };
@@ -298,30 +303,24 @@ export const DailyGoalChart: React.FC<DailyGoalChartProps> = ({
             </button>
           </div>
 
-          {/* DatePickers */}
+          {/* DateRangePicker */}
           <div className="flex items-center gap-2">
-            <DatePicker
-              value={formatDateForInput(startDate)}
-              onChange={(selectedDate) => {
+            <DateRangePicker
+              startDate={formatDateForInput(startDate)}
+              endDate={formatDateForInput(endDate)}
+              onStartDateChange={(selectedDate) => {
                 const [year, month, day] = selectedDate.split('-').map(Number);
                 const date = new Date(year, month - 1, day);
                 date.setHours(0, 0, 0, 0);
                 setInternalStartDate(date.getTime());
               }}
-              title="Data inicial"
-              placeholder="Data inicial"
-            />
-            <span className="text-slate-400 dark:text-slate-500 font-medium text-sm">até</span>
-            <DatePicker
-              value={formatDateForInput(endDate)}
-              onChange={(selectedDate) => {
+              onEndDateChange={(selectedDate) => {
                 const [year, month, day] = selectedDate.split('-').map(Number);
                 const date = new Date(year, month - 1, day);
                 date.setHours(23, 59, 59, 999);
                 setInternalEndDate(date.getTime());
               }}
-              title="Data final"
-              placeholder="Data final"
+              title="Selecionar período"
             />
             {(startDate !== currentWeekRange.start || endDate !== currentWeekRange.end) && (
               <button
@@ -399,7 +398,7 @@ export const DailyGoalChart: React.FC<DailyGoalChartProps> = ({
                                   // Opacidade: sempre visível, mas um pouco mais transparente quando não bateu a meta
                                   opacity: isHovered ? 1 : (designer.hitGoalToday ? 0.9 : 0.6)
                                 }}
-                                title={`Clique para ver demandas de ${designer.designerName}${designer.hitGoalToday ? ' (Meta batida hoje)' : ' (Meta não batida hoje)'}`}
+                                title={`Clique para ver demandas de ${designer.designerName}${designer.hitGoalToday ? ' (Meta batida hoje)' : ''}`}
                               >
                                 {/* Nome do designer na barra - apenas quando bater a meta */}
                                 {designer.hitGoalToday && (
@@ -428,14 +427,15 @@ export const DailyGoalChart: React.FC<DailyGoalChartProps> = ({
                                   </div>
                                   <div className="text-xs text-slate-600 dark:text-slate-400 space-y-0.5">
                                     <div>Artes hoje: {designer.artsCount}</div>
+                                    {designer.adjustmentsCount > 0 && (
+                                      <div className="text-slate-500 dark:text-slate-400">
+                                        Ajustes: {designer.adjustmentsCount}
+                                      </div>
+                                    )}
                                     <div>Meta: {dailyGoal}</div>
-                                    {designer.hitGoalToday ? (
+                                    {designer.hitGoalToday && (
                                       <div className="text-green-600 dark:text-green-400 font-semibold mt-1">
                                         ✓ Meta batida
-                                      </div>
-                                    ) : (
-                                      <div className="text-slate-400 text-xs mt-1">
-                                        Meta não batida hoje
                                       </div>
                                     )}
                                   </div>

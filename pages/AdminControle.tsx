@@ -12,7 +12,7 @@ export const AdminControle: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [selectedDesigner, setSelectedDesigner] = useState<string>('');
   const [note, setNote] = useState('');
-  const [type, setType] = useState<'absence' | 'event' | 'note' | 'meeting'>('note');
+  const [type, setType] = useState<'absence' | 'event' | 'note' | 'meeting' | 'no_demand'>('note');
 
   const designers = users.filter(u => u.role === 'DESIGNER' && u.active);
 
@@ -169,6 +169,8 @@ export const AdminControle: React.FC = () => {
         return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700';
       case 'meeting':
         return 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700';
+      case 'no_demand':
+        return 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border-orange-300 dark:border-orange-700';
       default:
         return 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600';
     }
@@ -183,6 +185,8 @@ export const AdminControle: React.FC = () => {
         return 'Evento';
       case 'meeting':
         return 'Reunião';
+      case 'no_demand':
+        return 'Sem demanda';
       default:
         return 'Nota';
     }
@@ -365,19 +369,20 @@ export const AdminControle: React.FC = () => {
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                   Tipo
                 </label>
-                <select
-                  value={type}
-                  onChange={(e) => {
-                    const newType = e.target.value as 'absence' | 'event' | 'note' | 'meeting';
-                    setType(newType);
-                  }}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-[#280FFF] focus:border-transparent"
-                >
-                  <option value="note">Nota</option>
-                  <option value="absence">Falta</option>
-                  <option value="event">Evento</option>
-                  <option value="meeting">Reunião</option>
-                </select>
+                  <select
+                    value={type}
+                    onChange={(e) => {
+                      const newType = e.target.value as 'absence' | 'event' | 'note' | 'meeting' | 'no_demand';
+                      setType(newType);
+                    }}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-[#280FFF] focus:border-transparent"
+                  >
+                    <option value="note">Nota</option>
+                    <option value="absence">Falta</option>
+                    <option value="event">Evento</option>
+                    <option value="meeting">Reunião</option>
+                    <option value="no_demand">Sem demanda</option>
+                  </select>
               </div>
 
               {/* Nota */}

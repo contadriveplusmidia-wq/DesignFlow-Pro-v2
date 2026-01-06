@@ -1,5 +1,5 @@
 -- Script para criar tabelas de tags e link_tags
--- Execute este SQL no seu banco de dados Neon
+-- Execute este SQL no seu banco de dados SQLite
 
 -- Criar tabela tags
 CREATE TABLE IF NOT EXISTS tags (

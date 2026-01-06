@@ -35,7 +35,7 @@ Tente criar uma tag novamente. Se ainda der erro, o sistema tentará criar a tab
 
 ## Se ainda não funcionar:
 
-Execute manualmente o SQL no Neon:
+Execute manualmente o SQL no seu banco de dados SQLite:
 
 ```sql
 CREATE TABLE IF NOT EXISTS tags (

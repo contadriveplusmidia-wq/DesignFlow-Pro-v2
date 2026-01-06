@@ -3,6 +3,7 @@ import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Login } from './pages/Login';
 import { Layout } from './components/Layout';
 import { DesignerDashboard } from './pages/DesignerDashboard';
@@ -19,6 +20,7 @@ import { AdminPremiacoes } from './pages/AdminPremiacoes';
 import { AdminLinks } from './pages/AdminLinks';
 import { AdminControle } from './pages/AdminControle';
 import { AdminTasks } from './pages/AdminTasks';
+import { AdminAdjustments } from './pages/AdminAdjustments';
 
 // Private Route Component
 const PrivateRoute: React.FC<{ children: React.ReactElement, requiredRole?: 'ADM' | 'DESIGNER' }> = ({ children, requiredRole }) => {
@@ -114,6 +116,11 @@ const AppRoutes = () => {
           <AdminTasks />
         </PrivateRoute>
       } />
+      <Route path="/admin/adjustments" element={
+        <PrivateRoute requiredRole="ADM">
+          <AdminAdjustments />
+        </PrivateRoute>
+      } />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/login" replace />} />
@@ -123,12 +130,14 @@ const AppRoutes = () => {
 
 export default function App() {
   return (
-    <AppProvider>
-      <NotificationProvider>
-        <HashRouter>
-          <AppRoutes />
-        </HashRouter>
-      </NotificationProvider>
-    </AppProvider>
+    <ErrorBoundary>
+      <AppProvider>
+        <NotificationProvider>
+          <HashRouter>
+            <AppRoutes />
+          </HashRouter>
+        </NotificationProvider>
+      </AppProvider>
+    </ErrorBoundary>
   );
 }

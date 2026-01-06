@@ -8,7 +8,7 @@ O erro mais provável é que a tabela `designer_notifications` ainda não foi cr
 
 ### Solução:
 
-1. **Acesse o SQL Editor do seu banco de dados** (Neon, Vercel, PostgreSQL, etc.)
+1. **Acesse o SQL Editor do seu banco de dados SQLite**
 
 2. **Execute o SQL do arquivo `create_designer_notifications_table.sql`:**
 

@@ -62,17 +62,18 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   }, [value]);
 
   const formatDisplayDate = (dateString: string): string => {
-    if (!dateString) return placeholder;
+    if (!dateString) return '';
     // IMPORTANTE: Parse manual da string YYYY-MM-DD para evitar problemas de timezone
     // new Date("2025-12-02") interpreta como UTC, causando deslocamento de -1 dia no Brasil (UTC-3)
     // Solução: fazer parse manual e criar data no timezone local
     const [year, month, day] = dateString.split('-').map(Number);
-    const date = new Date(year, month - 1, day); // month - 1 porque getMonth() retorna 0-11
-    return date.toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
+    
+    // Formato: DD/MM/YY (igual ao DateRangePicker)
+    const dayStr = String(day).padStart(2, '0');
+    const monthStr = String(month).padStart(2, '0');
+    const yearStr = String(year).slice(-2); // Últimos 2 dígitos do ano
+    
+    return `${dayStr}/${monthStr}/${yearStr}`;
   };
 
   const getDaysInMonth = (date: Date): Date[] => {
@@ -189,55 +190,61 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   const days = getDaysInMonth(currentMonth);
 
   return (
-    <div className="relative" ref={pickerRef}>
-      <div
+    <div className="relative inline-flex items-center gap-1 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 min-w-fit h-[40px]" ref={pickerRef}>
+      {/* Ícone de Calendário */}
+      <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="relative cursor-pointer"
+        className={`p-0.5 rounded transition-all duration-200 flex-shrink-0 ${
+          isOpen
+            ? 'text-brand-600 dark:text-brand-400 bg-brand-100 dark:bg-brand-900/30 ring-1 ring-brand-200 dark:ring-brand-800'
+            : 'text-slate-500 dark:text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+        }`}
+        title={title || placeholder}
       >
-        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none z-10" size={16} />
-        <input
-          type="text"
-          readOnly
-          value={formatDisplayDate(value)}
-          placeholder={placeholder}
-          className="pl-10 pr-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-600 focus:border-transparent outline-none transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-600 cursor-pointer shadow-sm hover:shadow w-full"
-          title={title}
-        />
+        <Calendar size={16} />
+      </button>
+
+      {/* Texto Central - Mostra a data */}
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        className="text-center text-sm font-medium text-slate-900 dark:text-white whitespace-nowrap px-1 cursor-pointer"
+      >
+        {value ? formatDisplayDate(value) : placeholder}
       </div>
 
       {isOpen && (
         <div className={`
-          absolute top-full left-0 mt-2 z-[100]
-          bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl
-          p-4 min-w-[280px] max-w-[320px]
-        `}>
+          absolute top-full mt-1.5 z-[100]
+          bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl
+          p-3 min-w-[260px] max-w-[300px]
+        `}
+        style={{ left: 0 }}>
           {/* Header do Calendário */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-3">
             <button
               onClick={handlePreviousMonth}
-              className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+              className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md transition-colors text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
             >
-              <ChevronLeft size={18} />
+              <ChevronLeft size={16} />
             </button>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
-              </span>
-            </div>
+            <span className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-white">
+              {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+            </span>
             <button
               onClick={handleNextMonth}
-              className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+              className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md transition-colors text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
             >
-              <ChevronRight size={18} />
+              <ChevronRight size={16} />
             </button>
           </div>
 
           {/* Dias da Semana */}
-          <div className="grid grid-cols-7 gap-1 mb-2">
+          <div className="grid grid-cols-7 gap-0.5 mb-2">
             {weekDays.map(day => (
               <div
                 key={day}
-                className={`text-xs font-semibold text-center py-1 ${
+                className={`text-[10px] sm:text-xs font-semibold text-center py-0.5 ${
                   day === 'Dom' 
                     ? 'text-slate-300 dark:text-slate-600' 
                     : 'text-slate-500 dark:text-slate-400'
@@ -249,7 +256,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
           </div>
 
           {/* Grid de Dias */}
-          <div className="grid grid-cols-7 gap-1">
+          <div className="grid grid-cols-7 gap-0.5">
             {days.map((date, idx) => {
               const disabled = isDateDisabled(date);
               const selected = isDateSelected(date);
@@ -263,13 +270,13 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                   onClick={() => handleDateClick(date)}
                   disabled={disabled || isSunday}
                   className={`
-                    aspect-square text-sm font-medium rounded-lg transition-all duration-200
+                    aspect-square text-xs sm:text-sm font-medium rounded-md transition-all duration-200
                     ${isSunday
                       ? 'text-slate-200 dark:text-slate-700 cursor-not-allowed opacity-30'
                       : disabled
                       ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-50'
                       : selected
-                      ? 'bg-brand-600 text-white shadow-md hover:bg-brand-700'
+                      ? 'bg-brand-600 text-white shadow-sm hover:bg-brand-700'
                       : today
                       ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-slate-300 hover:bg-brand-100 dark:hover:bg-brand-900/40'
                       : currentMonthDay
@@ -285,16 +292,17 @@ export const DatePicker: React.FC<DatePickerProps> = ({
           </div>
 
           {/* Botões de Ação */}
-          <div className="flex items-center justify-between gap-2 mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+          <div className="flex items-center justify-between gap-1.5 mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
             <button
               onClick={handleClear}
-              className="flex-1 px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              className="flex-1 px-2 py-1.5 text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md transition-colors flex items-center justify-center gap-1"
             >
+              <X size={12} />
               Limpar
             </button>
             <button
               onClick={handleToday}
-              className="flex-1 px-3 py-2 text-sm font-medium text-brand-600 dark:text-slate-300 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-lg transition-colors"
+              className="flex-1 px-2 py-1.5 text-xs sm:text-sm font-medium text-brand-600 dark:text-slate-300 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-md transition-colors"
             >
               Hoje
             </button>

@@ -14,8 +14,8 @@ npm run server
 
 ## Solução Manual (Se a automática não funcionar)
 
-### Opção 1: Via SQL Editor do Neon
-1. Acesse o dashboard do Neon
+### Opção 1: Via SQL Editor
+1. Acesse seu banco de dados SQLite
 2. Abra o SQL Editor
 3. Cole e execute o seguinte SQL:
 
@@ -46,7 +46,7 @@ CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name);
 O arquivo `create_tags_tables.sql` já contém esse SQL. Você pode:
 1. Abrir o arquivo no editor
 2. Copiar o conteúdo
-3. Colar no SQL Editor do Neon
+3. Colar no SQL Editor do seu banco de dados
 4. Executar
 
 ## Verificação

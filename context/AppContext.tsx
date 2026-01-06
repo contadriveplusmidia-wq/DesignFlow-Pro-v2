@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { User, ArtType, Demand, WorkSession, Feedback, Lesson, LessonProgress, SystemSettings, TimeFilter, AdminFilters, Award, UsefulLink, Tag, CalendarObservation, Task } from '../types';
+import { User, ArtType, Demand, WorkSession, Feedback, Lesson, LessonProgress, SystemSettings, TimeFilter, AdminFilters, Award, UsefulLink, Tag, CalendarObservation, Task, DemandAdjustment } from '../types';
 
 const API_URL = '';
 
@@ -65,17 +65,20 @@ interface AppContextType {
   addTask: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateTask: (id: string, task: Partial<Task>) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
+  addDemandAdjustment: (adjustment: Omit<DemandAdjustment, 'id' | 'createdAt'>) => Promise<void>;
+  getDemandAdjustments: (demandId: string) => Promise<DemandAdjustment[]>;
+  deleteDemandAdjustment: (id: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-export const useApp = () => {
+export function useApp() {
   const context = useContext(AppContext);
   if (!context) {
     throw new Error('useApp must be used within AppProvider');
   }
   return context;
-};
+}
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -84,15 +87,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (saved) {
         try {
           const user = JSON.parse(saved);
-          // Verificar se é antes das 6h - desconectar se for
-          const now = new Date();
-          const currentHour = now.getHours();
-          if (currentHour < 6) {
-            localStorage.removeItem('currentUser');
-            localStorage.removeItem('loginTimestamp');
-            localStorage.removeItem('loginDate');
-            return null;
-          }
           return user;
         } catch {
           return null;
@@ -242,18 +236,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       const loginTime = parseInt(loginTimestamp, 10);
       const currentTime = Date.now();
-      const now = new Date();
-      const currentHour = now.getHours();
-      
-      // Verificar se é antes das 6h da manhã - desconectar todos
-      if (currentHour < 6) {
-        console.log('🔒 Auto-logout: Antes das 6h da manhã - desconectando todos');
-        setCurrentUser(null);
-        localStorage.removeItem('currentUser');
-        localStorage.removeItem('loginTimestamp');
-        localStorage.removeItem('loginDate');
-        return;
-      }
       
       // Verificar se mudou o dia (desconectar todos) - verificação mais robusta
       // Comparar datas normalizadas (sem hora) para detectar mudança de dia
@@ -343,15 +325,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const login = async (name: string, password: string): Promise<boolean> => {
     try {
-      const now = new Date();
-      const currentHour = now.getHours();
-      
-      // Verificar se é antes das 6h - não permitir login
-      if (currentHour < 6) {
-        alert('Login só é permitido a partir das 6h da manhã. Todos os usuários são desconectados antes das 6h.');
-        return false;
-      }
-      
       const res = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -382,12 +355,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 const exists = prev.some(s => s.id === session.id);
                 return exists ? prev : [session, ...prev];
               });
-            }
-          } else {
-            // Se retornou erro, verificar se é porque é antes das 6h
-            const errorData = await sessionRes.json().catch(() => ({}));
-            if (errorData.code === 'BEFORE_6AM') {
-              alert('Registro de expediente só é permitido a partir das 6h da manhã.');
             }
           }
         } catch (e) {
@@ -697,12 +664,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const updateUser = async (id: string, user: Partial<User>) => {
-    await fetch(`${API_URL}/api/users/${id}`, {
+    const res = await fetch(`${API_URL}/api/users/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(user)
     });
-    setUsers(prev => prev.map(u => u.id === id ? { ...u, ...user } : u));
+    if (!res.ok) {
+      throw new Error('Erro ao atualizar usuário');
+    }
+    // Atualizar estado local garantindo que active seja boolean
+    setUsers(prev => prev.map(u => {
+      if (u.id === id) {
+        const updated = { ...u, ...user };
+        // Garantir que active seja sempre boolean
+        if ('active' in user && user.active !== undefined) {
+          const activeValue: any = user.active;
+          updated.active = activeValue === true || activeValue === 1 || activeValue === '1' || activeValue === 't' || activeValue === 'true';
+        }
+        return updated;
+      }
+      return u;
+    }));
   };
 
   const deleteUser = async (id: string) => {
@@ -864,6 +846,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setTasks(prev => prev.filter(t => t.id !== id));
   };
 
+  const addDemandAdjustment = async (adjustment: Omit<DemandAdjustment, 'id' | 'createdAt'>) => {
+    const res = await fetch(`${API_URL}/api/demand-adjustments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(adjustment)
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Erro ao criar ajuste' }));
+      throw new Error(error.error || 'Erro ao criar ajuste');
+    }
+    return await res.json();
+  };
+
+  const getDemandAdjustments = async (demandId: string): Promise<DemandAdjustment[]> => {
+    const res = await fetch(`${API_URL}/api/demand-adjustments/${demandId}`);
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Erro ao buscar ajustes' }));
+      throw new Error(error.error || 'Erro ao buscar ajustes');
+    }
+    return await res.json();
+  };
+
+  const deleteDemandAdjustment = async (id: string) => {
+    const res = await fetch(`${API_URL}/api/demand-adjustments/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Erro ao deletar ajuste' }));
+      throw new Error(error.error || 'Erro ao deletar ajuste');
+    }
+  };
+
   const refreshData = useCallback(fetchData, []);
 
   return (
@@ -926,7 +938,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       deleteCalendarObservation,
       addTask,
       updateTask,
-      deleteTask
+      deleteTask,
+      addDemandAdjustment,
+      getDemandAdjustments,
+      deleteDemandAdjustment
     }}>
       {children}
     </AppContext.Provider>

@@ -187,7 +187,7 @@ export interface CalendarObservation {
   designerName?: string;
   date: string; // YYYY-MM-DD format
   note: string;
-  type?: 'absence' | 'event' | 'note' | 'meeting'; // Tipo de observação
+  type?: 'absence' | 'event' | 'note' | 'meeting' | 'no_demand'; // Tipo de observação
   createdAt: number;
   updatedAt: number;
 }
@@ -201,4 +201,14 @@ export interface Task {
   createdAt: number;
   updatedAt: number;
   completedAt?: number;
+}
+
+export interface DemandAdjustment {
+  id: string;
+  demandId: string;
+  demandItemIndex: number; // Índice do item na lista de items da demanda
+  managerName: string;
+  reason: string;
+  imageUrl: string; // Base64 string em formato webp
+  createdAt: number;
 }

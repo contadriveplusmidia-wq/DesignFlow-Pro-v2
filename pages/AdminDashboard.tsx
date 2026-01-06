@@ -5,6 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { DateRangePicker } from '../components/DateRangePicker';
 import { HistoryCharts } from '../components/HistoryCharts';
 import { DailyGoalChart } from '../components/DailyGoalChart';
+import { getArtsCountForGoal } from '../utils/demandHelpers';
 
 type ChartMode = 'somaPoints' | 'somaArts' | 'mediaPoints' | 'mediaArts';
 type DateFilterType = 'hoje' | 'semana' | 'semanaPassada' | 'mes' | 'custom';
@@ -421,8 +422,7 @@ export const AdminDashboard: React.FC = () => {
       return acc + points;
     }, 0);
     const totalArts = filteredDemands.reduce((acc, d) => {
-      const quantity = Number(d.totalQuantity) || 0;
-      return acc + quantity;
+      return acc + getArtsCountForGoal(d);
     }, 0);
     const totalDemands = filteredDemands.length;
 
@@ -484,7 +484,7 @@ export const AdminDashboard: React.FC = () => {
           if (!demandsByDay[dayKey]) {
             demandsByDay[dayKey] = 0;
           }
-          demandsByDay[dayKey] += Number(d.totalQuantity) || 0;
+          demandsByDay[dayKey] += getArtsCountForGoal(d);
         }
       });
       
@@ -511,8 +511,7 @@ export const AdminDashboard: React.FC = () => {
         return acc + totalPoints;
       }, 0);
       const arts = designerDemands.reduce((acc, d) => {
-        const totalQuantity = Number(d.totalQuantity) || 0;
-        return acc + totalQuantity;
+        return acc + getArtsCountForGoal(d);
       }, 0);
       const avgPoints = workingDays > 0 ? Math.round(points / workingDays) : 0;
       const avgArts = workingDays > 0 ? Math.round((arts / workingDays) * 10) / 10 : 0;

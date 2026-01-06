@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, Cell } from 'recharts';
 import { BarChart3, TrendingUp, Calendar, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { Demand, User } from '../types';
+import { getArtsCountForGoal, getAdjustmentsCount } from '../utils/demandHelpers';
 
 type ChartTab = 'semana' | 'mes' | 'ano';
 
@@ -11,14 +12,19 @@ const DEFAULT_BLUE = '#3B82F6';
 // Componente de Tooltip customizado com tema
 interface CustomTooltipProps {
   active?: boolean;
-  payload?: Array<{ name: string; value: number; color: string }>;
+  payload?: Array<{ name: string; value: number; color: string; payload?: any }>;
   label?: string;
   isDark: boolean;
   formatter?: (value: number, name: string) => [number | string, string];
+  adjustmentsData?: Record<string, number>; // Nome do designer -> quantidade de ajustes
 }
 
-const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label, isDark, formatter }) => {
+const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label, isDark, formatter, adjustmentsData }) => {
   if (!active || !payload || payload.length === 0) return null;
+
+  // Obter dados de ajustes do payload (se disponível)
+  const payloadData = payload[0]?.payload;
+  const adjustmentsFromPayload = (payloadData as any)?.__adjustments || adjustmentsData || {};
 
   // Calcular o total de todos os valores
   const total = payload.reduce((sum, entry) => {
@@ -52,18 +58,27 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label, i
           const [formattedValue, formattedName] = formatter 
             ? formatter(entry.value, entry.name) 
             : [entry.value, entry.name];
+          const adjustments = adjustmentsFromPayload[entry.name] || 0;
           return (
-            <div key={index} className="flex items-center gap-2 text-xs">
-              <div 
-                className="w-2.5 h-2.5 rounded-full" 
-                style={{ backgroundColor: entry.color }}
-              />
-              <span className={isDark ? 'text-gray-300' : 'text-gray-600'}>
-                {formattedName}:
-              </span>
-              <span className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                {formattedValue}
-              </span>
+            <div key={index}>
+              <div className="flex items-center gap-2 text-xs">
+                <div 
+                  className="w-2.5 h-2.5 rounded-full" 
+                  style={{ backgroundColor: entry.color }}
+                />
+                <span className={isDark ? 'text-gray-300' : 'text-gray-600'}>
+                  {formattedName}:
+                </span>
+                <span className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  {formattedValue}
+                </span>
+              </div>
+              {adjustments > 0 && (
+                <div className="flex items-center gap-2 text-xs ml-7 text-slate-500 dark:text-slate-400">
+                  <span>Ajustes:</span>
+                  <span className="font-medium">{adjustments}</span>
+                </div>
+              )}
             </div>
           );
         })}
@@ -207,6 +222,7 @@ const getWeeklyProductivity = (demands: Demand[], designers: User[], selectedYea
   // Agrupar demandas por semana e designer
   return weeks.map(week => {
     const weekData: Record<string, number | string> = { name: week.label };
+    const adjustmentsData: Record<string, number> = {};
     
     designers.forEach((designer, idx) => {
       const designerDemands = demands.filter(d => {
@@ -231,10 +247,17 @@ const getWeeklyProductivity = (demands: Demand[], designers: User[], selectedYea
       
       const shortName = designer.name.split(' - ')[1] || designer.name.split(' ')[0];
       weekData[shortName] = designerDemands.reduce((acc, d) => {
-        const quantity = Number(d.totalQuantity) || 0;
-        return acc + quantity;
+        return acc + getArtsCountForGoal(d);
+      }, 0);
+      
+      // Calcular ajustes para esta semana
+      adjustmentsData[shortName] = designerDemands.reduce((acc, d) => {
+        return acc + getAdjustmentsCount(d);
       }, 0);
     });
+    
+    // Adicionar dados de ajustes como propriedade oculta (usada no tooltip)
+    (weekData as any).__adjustments = adjustmentsData;
     
     return weekData;
   });
@@ -254,6 +277,7 @@ const getMonthlyProductivity = (demands: Demand[], designers: User[]) => {
     const monthEnd = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
     
     const monthData: Record<string, number | string> = { name: monthName };
+    const adjustmentsData: Record<string, number> = {};
     
     designers.forEach(designer => {
       const designerDemands = demands.filter(d => {
@@ -265,10 +289,17 @@ const getMonthlyProductivity = (demands: Demand[], designers: User[]) => {
       
       const shortName = designer.name.split(' - ')[1] || designer.name.split(' ')[0];
       monthData[shortName] = designerDemands.reduce((acc, d) => {
-        const quantity = Number(d.totalQuantity) || 0;
-        return acc + quantity;
+        return acc + getArtsCountForGoal(d);
+      }, 0);
+      
+      // Calcular ajustes para este mês
+      adjustmentsData[shortName] = designerDemands.reduce((acc, d) => {
+        return acc + getAdjustmentsCount(d);
       }, 0);
     });
+    
+    // Adicionar dados de ajustes como propriedade oculta (usada no tooltip)
+    (monthData as any).__adjustments = adjustmentsData;
     
     return monthData;
   });
@@ -290,8 +321,7 @@ const getYearlyProductivity = (demands: Demand[], designers: User[]) => {
     });
     
     const totalArts = designerDemands.reduce((acc, d) => {
-      const quantity = Number(d.totalQuantity) || 0;
-      return acc + quantity;
+      return acc + getArtsCountForGoal(d);
     }, 0);
     const totalPoints = designerDemands.reduce((acc, d) => {
       const points = Number(d.totalPoints) || 0;
